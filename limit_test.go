@@ -5,7 +5,7 @@ import (
 	"testing"
 
 	. "gopkg.in/check.v1"
-	"gopkg.in/laverya/yaml.v3"
+	"github.com/replicatedhq/yaml/v3"
 )
 
 var limitTests = []struct {

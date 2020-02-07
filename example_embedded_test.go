@@ -19,7 +19,7 @@ import (
 	"fmt"
 	"log"
 
-	"gopkg.in/laverya/yaml.v3"
+	"github.com/replicatedhq/yaml/v3"
 )
 
 // An example showing how to unmarshal embedded

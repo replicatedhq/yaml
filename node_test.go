@@ -21,7 +21,7 @@ import (
 	"os"
 
 	. "gopkg.in/check.v1"
-	"gopkg.in/laverya/yaml.v3"
+	"github.com/replicatedhq/yaml/v3"
 	"io"
 	"strings"
 )
