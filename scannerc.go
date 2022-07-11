@@ -2429,9 +2429,7 @@ func yaml_parser_scan_block_scalar_breaks(parser *yaml_parser_t, indent *int, br
 
 // Scan a quoted scalar.
 func yaml_parser_scan_flow_scalar(parser *yaml_parser_t, token *yaml_token_t, single bool) bool {
-	// Eat the left quote.
 	start_mark := parser.mark
-	skip(parser)
 
 	// Consume the content of the quoted scalar.
 	var s, leading_break, trailing_breaks, whitespaces []byte
@@ -2665,8 +2663,6 @@ func yaml_parser_scan_flow_scalar(parser *yaml_parser_t, token *yaml_token_t, si
 		}
 	}
 
-	// Eat the right quote.
-	skip(parser)
 	end_mark := parser.mark
 
 	// Create a token.
