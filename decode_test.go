@@ -505,7 +505,7 @@ var unmarshalTests = []struct {
 		map[string]*string{"foo": nil},
 	}, {
 		"foo: null",
-		map[string]string{},
+		map[string]string{"foo": ""},
 	}, {
 		"foo: null",
 		map[string]interface{}{"foo": nil},
@@ -517,7 +517,7 @@ var unmarshalTests = []struct {
 		map[string]*string{"foo": nil},
 	}, {
 		"foo: ~",
-		map[string]string{},
+		map[string]string{"foo": ""},
 	}, {
 		"foo: ~",
 		map[string]interface{}{"foo": nil},
@@ -767,7 +767,7 @@ var unmarshalTests = []struct {
 		M{"a": 123456e1},
 	}, {
 		"a: 123456E1\n",
-		M{"a": 123456E1},
+		M{"a": 123456e1},
 	},
 	// yaml-test-suite 3GZX: Spec Example 7.1. Alias Nodes
 	{
@@ -997,6 +997,9 @@ var unmarshalErrorTests = []struct {
 	{"b: *a\na: &a {c: 1}", `yaml: unknown anchor 'a' referenced`},
 	{"%TAG !%79! tag:yaml.org,2002:\n---\nv: !%79!int '1'", "yaml: did not find expected whitespace"},
 	{"a:\n  1:\nb\n  2:", ".*could not find expected ':'"},
+	{"a: 1\nb: 2\nc 2\nd: 3\n", "^yaml: line 3: could not find expected ':'$"},
+	{"#\n-\n{", "yaml: line 3: could not find expected ':'"}, // Issue #665
+	{"0: [:!00 \xef", "yaml: incomplete UTF-8 octet sequence"}, // Issue #666
 	{
 		"a: &a [00,00,00,00,00,00,00,00,00]\n" +
 			"b: &b [*a,*a,*a,*a,*a,*a,*a,*a,*a]\n" +
@@ -1440,7 +1443,7 @@ inlineSequenceMap:
 `
 
 func (s *S) TestMerge(c *C) {
-	var want = map[interface{}]interface{}{
+	var want = map[string]interface{}{
 		"x":     1,
 		"y":     2,
 		"r":     10,
@@ -1485,29 +1488,147 @@ func (s *S) TestMergeStruct(c *C) {
 	}
 }
 
-var unmarshalNullTests = []func() interface{}{
-	func() interface{} { var v interface{}; v = "v"; return &v },
-	func() interface{} { var s = "s"; return &s },
-	func() interface{} { var s = "s"; sptr := &s; return &sptr },
-	func() interface{} { var i = 1; return &i },
-	func() interface{} { var i = 1; iptr := &i; return &iptr },
-	func() interface{} { m := map[string]int{"s": 1}; return &m },
-	func() interface{} { m := map[string]int{"s": 1}; return m },
+var mergeTestsNested = `
+mergeouter1: &mergeouter1
+    d: 40
+    e: 50
+
+mergeouter2: &mergeouter2
+    e: 5
+    f: 6
+    g: 70
+
+mergeinner1: &mergeinner1
+    <<: *mergeouter1
+    inner:
+        a: 1
+        b: 2
+
+mergeinner2: &mergeinner2
+    <<: *mergeouter2
+    inner:
+        a: -1
+        b: -2
+
+outer:
+    <<: [*mergeinner1, *mergeinner2]
+    f: 60
+    inner:
+        a: 10
+`
+
+func (s *S) TestMergeNestedStruct(c *C) {
+	// Issue #818: Merging used to just unmarshal twice on the target
+	// value, which worked for maps as these were replaced by the new map,
+	// but not on struct values as these are preserved. This resulted in
+	// the nested data from the merged map to be mixed up with the data
+	// from the map being merged into.
+	//
+	// This test also prevents two potential bugs from showing up:
+	//
+	// 1) A simple implementation might just zero out the nested value
+	//    before unmarshaling the second time, but this would clobber previous
+	//    data that is usually respected ({C: 30} below).
+	//
+	// 2) A simple implementation might attempt to handle the key skipping
+	//    directly by iterating over the merging map without recursion, but
+	//    there are more complex cases that require recursion.
+	// 
+	// Quick summary of the fields:
+	//
+	// - A must come from outer and not overriden
+	// - B must not be set as its in the ignored merge
+	// - C should still be set as it's preset in the value
+	// - D should be set from the recursive merge
+	// - E should be set from the first recursive merge, ignored on the second
+	// - F should be set in the inlined map from outer, ignored later
+	// - G should be set in the inlined map from the second recursive merge
+	//
+
+	type Inner struct {
+		A, B, C int
+	}
+	type Outer struct {
+		D, E      int
+		Inner  Inner
+		Inline map[string]int `yaml:",inline"`
+	}
+	type Data struct {
+		Outer Outer
+	}
+
+	test := Data{Outer{0, 0, Inner{C: 30}, nil}}
+	want := Data{Outer{40, 50, Inner{A: 10, C: 30}, map[string]int{"f": 60, "g": 70}}}
+
+	err := yaml.Unmarshal([]byte(mergeTestsNested), &test)
+	c.Assert(err, IsNil)
+	c.Assert(test, DeepEquals, want)
+
+	// Repeat test with a map.
+
+	var testm map[string]interface{}
+	var wantm = map[string]interface {} {
+		"f":     60,
+		"inner": map[string]interface{}{
+		    "a": 10,
+		},
+		"d": 40,
+		"e": 50,
+		"g": 70,
+	}
+	err = yaml.Unmarshal([]byte(mergeTestsNested), &testm)
+	c.Assert(err, IsNil)
+	c.Assert(testm["outer"], DeepEquals, wantm)
 }
+
+var unmarshalNullTests = []struct {
+	input              string
+	pristine, expected func() interface{}
+}{{
+	"null",
+	func() interface{} { var v interface{}; v = "v"; return &v },
+	func() interface{} { var v interface{}; v = nil; return &v },
+}, {
+	"null",
+	func() interface{} { var s = "s"; return &s },
+	func() interface{} { var s = "s"; return &s },
+}, {
+	"null",
+	func() interface{} { var s = "s"; sptr := &s; return &sptr },
+	func() interface{} { var sptr *string; return &sptr },
+}, {
+	"null",
+	func() interface{} { var i = 1; return &i },
+	func() interface{} { var i = 1; return &i },
+}, {
+	"null",
+	func() interface{} { var i = 1; iptr := &i; return &iptr },
+	func() interface{} { var iptr *int; return &iptr },
+}, {
+	"null",
+	func() interface{} { var m = map[string]int{"s": 1}; return &m },
+	func() interface{} { var m map[string]int; return &m },
+}, {
+	"null",
+	func() interface{} { var m = map[string]int{"s": 1}; return m },
+	func() interface{} { var m = map[string]int{"s": 1}; return m },
+}, {
+	"s2: null\ns3: null",
+	func() interface{} { var m = map[string]int{"s1": 1, "s2": 2}; return m },
+	func() interface{} { var m = map[string]int{"s1": 1, "s2": 2, "s3": 0}; return m },
+}, {
+	"s2: null\ns3: null",
+	func() interface{} { var m = map[string]interface{}{"s1": 1, "s2": 2}; return m },
+	func() interface{} { var m = map[string]interface{}{"s1": 1, "s2": nil, "s3": nil}; return m },
+}}
 
 func (s *S) TestUnmarshalNull(c *C) {
 	for _, test := range unmarshalNullTests {
-		pristine := test()
-		decoded := test()
-		zero := reflect.Zero(reflect.TypeOf(decoded).Elem()).Interface()
-		err := yaml.Unmarshal([]byte("null"), decoded)
+		pristine := test.pristine()
+		expected := test.expected()
+		err := yaml.Unmarshal([]byte(test.input), pristine)
 		c.Assert(err, IsNil)
-		switch pristine.(type) {
-		case *interface{}, **string, **int, *map[string]int:
-			c.Assert(reflect.ValueOf(decoded).Elem().Interface(), DeepEquals, zero)
-		default:
-			c.Assert(reflect.ValueOf(decoded).Interface(), DeepEquals, pristine)
-		}
+		c.Assert(pristine, DeepEquals, expected)
 	}
 }
 
