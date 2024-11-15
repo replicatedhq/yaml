@@ -629,6 +629,8 @@ var marshalerTests = []struct {
 	{"_: 10\n", 10},
 	{"_: null\n", nil},
 	{"_: BAR!\n", "BAR!"},
+	{"_:\n    lines: |-\n        one\n        two\n        three\n", map[interface{}]interface{}{"lines": "one\ntwo\nthree"}},
+	{"_:\n    lines: |-\n        one\n        two \n        three\n", map[interface{}]interface{}{"lines": "one\ntwo \nthree"}},
 }
 
 type marshalerType struct {
