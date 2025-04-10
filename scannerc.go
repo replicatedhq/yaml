@@ -889,7 +889,7 @@ func yaml_simple_key_is_valid(parser *yaml_parser_t, simple_key *yaml_simple_key
 	//
 	//     "If the ? indicator is omitted, parsing needs to see past the
 	//     implicit key to recognize it as such. To limit the amount of
-	//     lookahead required, the “:” indicator must appear at most 1024
+	//     lookahead required, the ":" indicator must appear at most 1024
 	//     Unicode characters beyond the start of the key. In addition, the key
 	//     is restricted to a single line."
 	//
@@ -1614,11 +1614,11 @@ func yaml_parser_scan_to_next_token(parser *yaml_parser_t) bool {
 // Scan a YAML-DIRECTIVE or TAG-DIRECTIVE token.
 //
 // Scope:
-//      %YAML    1.1    # a comment \n
-//      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-//      %TAG    !yaml!  tag:yaml.org,2002:  \n
-//      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 //
+//	%YAML    1.1    # a comment \n
+//	^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+//	%TAG    !yaml!  tag:yaml.org,2002:  \n
+//	^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 func yaml_parser_scan_directive(parser *yaml_parser_t, token *yaml_token_t) bool {
 	// Eat '%'.
 	start_mark := parser.mark
@@ -1719,11 +1719,11 @@ func yaml_parser_scan_directive(parser *yaml_parser_t, token *yaml_token_t) bool
 // Scan the directive name.
 //
 // Scope:
-//      %YAML   1.1     # a comment \n
-//       ^^^^
-//      %TAG    !yaml!  tag:yaml.org,2002:  \n
-//       ^^^
 //
+//	%YAML   1.1     # a comment \n
+//	 ^^^^
+//	%TAG    !yaml!  tag:yaml.org,2002:  \n
+//	 ^^^
 func yaml_parser_scan_directive_name(parser *yaml_parser_t, start_mark yaml_mark_t, name *[]byte) bool {
 	// Consume the directive name.
 	if parser.unread < 1 && !yaml_parser_update_buffer(parser, 1) {
@@ -1758,8 +1758,9 @@ func yaml_parser_scan_directive_name(parser *yaml_parser_t, start_mark yaml_mark
 // Scan the value of VERSION-DIRECTIVE.
 //
 // Scope:
-//      %YAML   1.1     # a comment \n
-//           ^^^^^^
+//
+//	%YAML   1.1     # a comment \n
+//	     ^^^^^^
 func yaml_parser_scan_version_directive_value(parser *yaml_parser_t, start_mark yaml_mark_t, major, minor *int8) bool {
 	// Eat whitespaces.
 	if parser.unread < 1 && !yaml_parser_update_buffer(parser, 1) {
@@ -1797,10 +1798,11 @@ const max_number_length = 2
 // Scan the version number of VERSION-DIRECTIVE.
 //
 // Scope:
-//      %YAML   1.1     # a comment \n
-//              ^
-//      %YAML   1.1     # a comment \n
-//                ^
+//
+//	%YAML   1.1     # a comment \n
+//	        ^
+//	%YAML   1.1     # a comment \n
+//	          ^
 func yaml_parser_scan_version_directive_number(parser *yaml_parser_t, start_mark yaml_mark_t, number *int8) bool {
 
 	// Repeat while the next character is digit.
@@ -1834,9 +1836,9 @@ func yaml_parser_scan_version_directive_number(parser *yaml_parser_t, start_mark
 // Scan the value of a TAG-DIRECTIVE token.
 //
 // Scope:
-//      %TAG    !yaml!  tag:yaml.org,2002:  \n
-//          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 //
+//	%TAG    !yaml!  tag:yaml.org,2002:  \n
+//	    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 func yaml_parser_scan_tag_directive_value(parser *yaml_parser_t, start_mark yaml_mark_t, handle, prefix *[]byte) bool {
 	var handle_value, prefix_value []byte
 
@@ -2544,9 +2546,18 @@ func yaml_parser_scan_flow_scalar(parser *yaml_parser_t, token *yaml_token_t, si
 				case 'U':
 					code_length = 8
 				default:
-					yaml_parser_set_scanner_error(parser, "while parsing a quoted scalar",
-						start_mark, "found unknown escape character")
-					return false
+					if parser.permissive_escapes {
+						// For unknown escape sequences, keep the escape character and the following character verbatim
+						s = append(s, '\\')
+						s = append(s, parser.buffer[parser.buffer_pos+1])
+						skip(parser)
+						skip(parser)
+						continue
+					} else {
+						yaml_parser_set_scanner_error(parser, "while parsing a quoted scalar",
+							start_mark, "found unknown escape character")
+						return false
+					}
 				}
 
 				skip(parser)
