@@ -50,6 +50,11 @@ func newParser(b []byte) *parser {
 	return &p
 }
 
+// Enable permissive escape sequence handling for the parser.
+func (p *parser) setPermissiveEscapes() {
+	p.parser.permissive_escapes = true
+}
+
 func newParserFromReader(r io.Reader) *parser {
 	p := parser{}
 	if !yaml_parser_initialize(&p.parser) {
