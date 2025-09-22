@@ -227,7 +227,14 @@ func (e *encoder) structv(tag string, in reflect.Value) {
 					continue
 				}
 			}
+			omit := false
 			if info.OmitEmpty && isZero(value) {
+				omit = true
+			}
+			if !omit && info.OmitZero && isZeroValue(value) {
+				omit = true
+			}
+			if omit {
 				continue
 			}
 			e.marshal("", reflect.ValueOf(info.Key))
