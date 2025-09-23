@@ -789,3 +789,137 @@ func (s *S) TestSortedOutput(c *C) {
 func newTime(t time.Time) *time.Time {
 	return &t
 }
+
+func (s *S) TestOmitZero(c *C) {
+	defer os.Setenv("TZ", os.Getenv("TZ"))
+	os.Setenv("TZ", "UTC")
+
+	type intZero struct {
+		A int `yaml:"a,omitzero"`
+	}
+	type stringZero struct {
+		A string `yaml:"a,omitzero"`
+	}
+	type boolZero struct {
+		A bool `yaml:"a,omitzero"`
+	}
+	type ptrIntZero struct {
+		A *int `yaml:"a,omitzero"`
+	}
+	type sliceZero struct {
+		A []int `yaml:"a,omitzero"`
+	}
+	type mapZero struct {
+		A map[string]int `yaml:"a,omitzero"`
+	}
+	type structZeroInner struct {
+		X int `yaml:"x"`
+	}
+	type structZero struct {
+		A structZeroInner `yaml:"a,omitzero,flow"`
+	}
+	type timeZero struct {
+		T time.Time `yaml:"t,omitzero"`
+	}
+	type nodeZero struct {
+		B yaml.Node `yaml:",omitzero"`
+	}
+	type bothSlice struct {
+		A []int `yaml:"a,omitzero,omitempty"`
+	}
+	type bothPtr struct {
+		A *int `yaml:"a,omitzero,omitempty"`
+	}
+
+	// int
+	out, err := yaml.Marshal(&intZero{})
+	c.Assert(err, IsNil)
+	c.Assert(string(out), Equals, "{}\n")
+	v := intZero{A: 1}
+	out, err = yaml.Marshal(&v)
+	c.Assert(err, IsNil)
+	c.Assert(string(out), Equals, "a: 1\n")
+
+	// string
+	out, err = yaml.Marshal(&stringZero{})
+	c.Assert(err, IsNil)
+	c.Assert(string(out), Equals, "{}\n")
+	out, err = yaml.Marshal(&stringZero{A: "x"})
+	c.Assert(err, IsNil)
+	c.Assert(string(out), Equals, "a: x\n")
+
+	// bool
+	out, err = yaml.Marshal(&boolZero{})
+	c.Assert(err, IsNil)
+	c.Assert(string(out), Equals, "{}\n")
+	out, err = yaml.Marshal(&boolZero{A: true})
+	c.Assert(err, IsNil)
+	c.Assert(string(out), Equals, "a: true\n")
+
+	// pointer
+	out, err = yaml.Marshal(&ptrIntZero{})
+	c.Assert(err, IsNil)
+	c.Assert(string(out), Equals, "{}\n")
+	zero := 0
+	out, err = yaml.Marshal(&ptrIntZero{A: &zero})
+	c.Assert(err, IsNil)
+	c.Assert(string(out), Equals, "a: 0\n")
+
+	// slice
+	out, err = yaml.Marshal(&sliceZero{})
+	c.Assert(err, IsNil)
+	c.Assert(string(out), Equals, "{}\n")
+	out, err = yaml.Marshal(&sliceZero{A: []int{}})
+	c.Assert(err, IsNil)
+	c.Assert(string(out), Equals, "a: []\n")
+
+	// map
+	out, err = yaml.Marshal(&mapZero{})
+	c.Assert(err, IsNil)
+	c.Assert(string(out), Equals, "{}\n")
+	out, err = yaml.Marshal(&mapZero{A: map[string]int{}})
+	c.Assert(err, IsNil)
+	c.Assert(string(out), Equals, "a: {}\n")
+
+	// struct
+	out, err = yaml.Marshal(&structZero{})
+	c.Assert(err, IsNil)
+	c.Assert(string(out), Equals, "{}\n")
+	out, err = yaml.Marshal(&structZero{A: structZeroInner{X: 1}})
+	c.Assert(err, IsNil)
+	c.Assert(string(out), Equals, "a: {x: 1}\n")
+
+	// time.Time
+	out, err = yaml.Marshal(&timeZero{})
+	c.Assert(err, IsNil)
+	c.Assert(string(out), Equals, "{}\n")
+	out, err = yaml.Marshal(&timeZero{T: time.Date(2018, 1, 9, 10, 40, 47, 0, time.UTC)})
+	c.Assert(err, IsNil)
+	c.Assert(string(out), Equals, "t: 2018-01-09T10:40:47Z\n")
+
+	// yaml.Node
+	out, err = yaml.Marshal(&nodeZero{})
+	c.Assert(err, IsNil)
+	c.Assert(string(out), Equals, "{}\n")
+	out, err = yaml.Marshal(&nodeZero{B: yaml.Node{Kind: yaml.ScalarNode, Tag: "!!str", Value: "x"}})
+	c.Assert(err, IsNil)
+	c.Assert(string(out), Equals, "b: x\n")
+
+	// combined flags
+	out, err = yaml.Marshal(&bothSlice{})
+	c.Assert(err, IsNil)
+	c.Assert(string(out), Equals, "{}\n")
+	out, err = yaml.Marshal(&bothSlice{A: []int{}})
+	c.Assert(err, IsNil)
+	c.Assert(string(out), Equals, "{}\n")
+	out, err = yaml.Marshal(&bothSlice{A: []int{1}})
+	c.Assert(err, IsNil)
+	c.Assert(string(out), Equals, "a:\n    - 1\n")
+
+	out, err = yaml.Marshal(&bothPtr{})
+	c.Assert(err, IsNil)
+	c.Assert(string(out), Equals, "{}\n")
+	out, err = yaml.Marshal(&bothPtr{A: &zero})
+	c.Assert(err, IsNil)
+	c.Assert(string(out), Equals, "a: 0\n")
+}
